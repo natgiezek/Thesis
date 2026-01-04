@@ -1,0 +1,237 @@
+# ==============================================================================
+# Thesis regressions: OFDI flows/stocks, linear and log-log specifications
+# ==============================================================================
+
+# ---- Setup -------------------------------------------------------------------
+rm(list = ls())
+
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(readxl)
+  library(car)
+  library(stargazer)
+  library(here)
+})
+
+# ---- I/O ---------------------------------------------------------------------
+data_path <- here::here("Downloads", "AV_Data.xlsx")   
+av_data <- read_excel(data_path)
+
+# If you really want a viewer in interactive sessions:
+if (interactive()) View(av_data)
+
+# ---- Variables / transforms ---------------------------------------------------
+# Keep everything in the data frame; avoid creating lots of globals.
+av_data <- av_data %>%
+  mutate(
+    # convenience renames (optional)
+    INR    = Infrastructure,
+    INF    = Inflation,
+    RES    = Resources,
+    FUEL   = fuels,
+    OIL    = oilrent,
+    GDP_gr = GDP_growth,
+    
+    # dependent variables
+    LOFDI       = log(OFDI_flow + 13),
+    LOFDI_stock = log(OFDI_stock),
+    
+    # covariates (levels)
+    # GDP, WGI, ORES, REE assumed present in the input
+    
+    # covariates (logs)
+    LGDP    = log(GDP),
+    LGDP_gr = log(GDP_gr + 5),
+    LWGI    = log(WGI + 2),
+    LINR    = log(INR),
+    LINF    = log(INF + 1),
+    LORES   = log(ORES + 1),
+    LRES    = log(RES),
+    LFUEL   = log(FUEL + 1),
+    LOIL    = log(OIL + 1),
+    LREE    = log(REE + 1)
+  )
+
+# ---- Diagnostics: VIF ---------------------------------------------------------
+ols_vif <- lm(
+  LOFDI ~ LGDP + LGDP_gr + LWGI + LINR + LINF + LORES + LREE,
+  data = av_data
+)
+car::vif(ols_vif)
+
+# ---- Descriptive tables -------------------------------------------------------
+# NOTE: Your original script referenced `Tables_thesis` but never defined it.
+# The blocks below are kept, but guarded to avoid hard errors.
+
+stargazer(
+  av_data,
+  type = "html",
+  summary = FALSE,
+  title = "Table 3. REE deposit sites by country",
+  out = "REEsites.html"
+)
+
+if (exists("Tables_thesis")) {
+  stargazer(
+    Tables_thesis, type = "html", summary = FALSE,
+    title = "Table 4. Summary Statistics", digits = 6,
+    out = "SummaryStats.html"
+  )
+  stargazer(
+    Tables_thesis, type = "html", summary = FALSE,
+    title = "Table 5. Correlation Matrix", digits = 6,
+    out = "Correlations.html"
+  )
+  stargazer(
+    Tables_thesis, type = "html", summary = FALSE,
+    title = "Table 6. Variance Inflation Factors", digits = 4,
+    out = "vif.html"
+  )
+}
+
+# ---- Model helpers ------------------------------------------------------------
+fit_models <- function(dv, specs, data) {
+  # specs: named list of RHS strings
+  map(specs, ~ lm(as.formula(paste(dv, "~", .x)), data = data))
+}
+
+export_stargazer <- function(models, file, title) {
+  stargazer(
+    models,
+    type = "html",
+    title = title,
+    align = TRUE,
+    header = FALSE,
+    ci = FALSE,
+    star.cutoffs = c(0.1, 0.05, 0.01, 0.001),
+    omit.stat = c("f"),
+    out = file
+  )
+}
+
+# ---- Log-log models (DV: LOFDI) ----------------------------------------------
+log_specs_flow <- list(
+  OLS_log  = "LGDP + LGDP_gr + LWGI + LINR + LINF + LORES",
+  OLS_log1 = "LGDP + LGDP_gr + LWGI + LINR + LINF + LORES + LREE",
+  OLS_log2 = "LGDP + LGDP_gr + LWGI + LINR + LINF + LREE",
+  OLS_log3 = "LGDP + LGDP_gr + LWGI + LINR + LINF + LORES + LFUEL",
+  OLS_log4 = "LGDP + LGDP_gr + LWGI + LINR + LINF + LORES + LFUEL + LREE",
+  OLS_log5 = "LGDP + LGDP_gr + LWGI + LINR + LINF + LFUEL + LREE",
+  OLS_log6 = "LGDP + LGDP_gr + LWGI + LINR + LINF + LRES + LREE",
+  OLS_log7 = "LGDP + LGDP_gr + LWGI + LINR + LINF + LRES",
+  OLS_log8 = "LREE",
+  OLS_log9 = "LORES"
+)
+
+models_log_flow <- fit_models("LOFDI", log_specs_flow, av_data)
+
+# Print summaries (optional)
+walk(models_log_flow, summary)
+
+# Export selected models to a single table (as in your original)
+export_stargazer(
+  models = list(
+    models_log_flow$OLS_log,
+    models_log_flow$OLS_log1,
+    models_log_flow$OLS_log2,
+    models_log_flow$OLS_log6,
+    models_log_flow$OLS_log8,
+    models_log_flow$OLS_log9
+  ),
+  file  = "aa_table.html",
+  title = "Table 7. Logarithmic Regression Models Summary"
+)
+
+# ---- Linear models (DV: OFDI_flow) -------------------------------------------
+lin_specs_flow <- list(
+  OLS    = "GDP + GDP_gr + WGI + INR + INF + ORES",
+  OLS_1  = "GDP + GDP_gr + WGI + INR + INF + ORES + REE",
+  OLS_2  = "GDP + GDP_gr + WGI + INR + INF + REE",
+  OLS_3  = "GDP + GDP_gr + WGI + INR + INF + ORES + FUEL",
+  OLS_4  = "GDP + GDP_gr + WGI + INR + INF + ORES + FUEL + REE",
+  OLS_5  = "GDP + GDP_gr + WGI + INR + INF + FUEL + REE",
+  OLS_6  = "GDP + GDP_gr + WGI + INR + INF + RES + REE",
+  OLS_7  = "GDP + GDP_gr + WGI + INR + INF + RES",
+  OLS_8  = "REE",
+  OLS_9  = "ORES",
+  OLS_10 = "GDP + GDP_gr + WGI + INR + INF + OIL + REE",
+  OLS_11 = "GDP + GDP_gr + WGI + INR + INF + OIL"
+)
+
+models_lin_flow <- fit_models("OFDI_flow", lin_specs_flow, av_data)
+walk(models_lin_flow, summary)
+
+export_stargazer(
+  models = list(
+    models_lin_flow$OLS_3,
+    models_lin_flow$OLS_4,
+    models_lin_flow$OLS_7,
+    models_lin_flow$OLS_9,
+    models_lin_flow$OLS_10,
+    models_lin_flow$OLS_11
+  ),
+  file  = "bcc_table.html",
+  title = "Table 7.1. Linear Regression Models Summary"
+)
+
+# ---- Linear models (DV: OFDI_stock) ------------------------------------------
+lin_specs_stock <- list(
+  OL    = "GDP + GDP_gr + WGI + INR + INF + ORES",
+  OL_1  = "GDP + GDP_gr + WGI + INR + INF + ORES + REE",
+  OL_2  = "GDP + GDP_gr + WGI + INR + INF + REE",
+  OL_3  = "GDP + GDP_gr + WGI + INR + INF + ORES + FUEL",
+  OL_4  = "GDP + GDP_gr + WGI + INR + INF + ORES + FUEL + REE",
+  OL_5  = "GDP + GDP_gr + WGI + INR + INF + FUEL + REE",
+  OL_6  = "GDP + GDP_gr + WGI + INR + INF + RES + REE",
+  OL_7  = "GDP + GDP_gr + WGI + INR + INF + RES",
+  OL_8  = "REE",
+  OL_9  = "ORES",
+  OL_10 = "GDP + GDP_gr + WGI + INR + INF + OIL + REE",
+  OL_11 = "GDP + GDP_gr + WGI + INR + INF + OIL"
+)
+
+models_lin_stock <- fit_models("OFDI_stock", lin_specs_stock, av_data)
+walk(models_lin_stock, summary)
+
+# ---- Log-log models (DV: LOFDI_stock) ----------------------------------------
+log_specs_stock <- list(
+  OS_log  = "LGDP + LGDP_gr + LWGI + LINR + LINF + LORES",
+  OS_log1 = "LGDP + LGDP_gr + LWGI + LINR + LINF + LORES + LREE",
+  OS_log2 = "LGDP + LGDP_gr + LWGI + LINR + LINF + LREE",
+  OS_log3 = "LGDP + LGDP_gr + LWGI + LINR + LINF + LORES + LFUEL",
+  OS_log4 = "LGDP + LGDP_gr + LWGI + LINR + LINF + LORES + LFUEL + LREE",
+  OS_log5 = "LGDP + LGDP_gr + LWGI + LINR + LINF + LFUEL + LREE",
+  OS_log6 = "LGDP + LGDP_gr + LWGI + LINR + LINF + LRES + LREE",
+  OS_log7 = "LGDP + LGDP_gr + LWGI + LINR + LINF + LRES",
+  OS_log8 = "LREE",
+  OS_log9 = "LORES"
+)
+
+models_log_stock <- fit_models("LOFDI_stock", log_specs_stock, av_data)
+walk(models_log_stock, summary)
+
+export_stargazer(
+  models = list(
+    models_log_stock$OS_log,
+    models_log_stock$OS_log1,
+    models_log_stock$OS_log2,
+    models_log_stock$OS_log3,
+    models_log_stock$OS_log4,
+    models_log_stock$OS_log5
+  ),
+  file  = "e_table.html",
+  title = "Table 9.2. Logarithmic Regression Models Summary"
+)
+
+export_stargazer(
+  models = list(
+    models_log_stock$OS_log6,
+    models_log_stock$OS_log7,
+    models_log_stock$OS_log8,
+    models_log_stock$OS_log9
+  ),
+  file  = "ee_table.html",
+  title = "Table 9.3. Logarithmic Regression Models Summary - continuation"
+)
+
+
