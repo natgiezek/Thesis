@@ -1,1 +1,2 @@
-# Thesis
+# The Role of Rare Earth Metals (REMs) in Chinese OFDI in Africa
+Examined how rare earth element (REE) deposits influence Chinese outward foreign direct investment (OFDI) across 52 African countries from 2003–2020. Applied cross-country linear and logarithmic regression models to assess the relationship between REE availability and investment inflows. Found evidence that countries with higher rare earth potential attract greater Chinese OFDI, while the influence of broader mineral exports weakens once REE factors are included. Results suggest that China’s investment strategy might reinforce its near-monopoly position in global rare earth production, mirroring OPEC’s influence in oil markets.
